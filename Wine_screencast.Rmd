@@ -113,14 +113,28 @@ anova(model) %>%
 ```{r}
 library(tidytext)
 ```
+```{r}
+wine_rating_words <- wine_ratings %>% 
+  mutate(wine_id = row_number()) %>% 
+  unnest_tokens(word, description) %>% 
+  anti_join(stop_words, by = "word") 
 
+wine_rating_words <- wine_rating_words %>% 
+  filter(!word %in% c("wine", "drink"))
+```
 
 ```{r}
-wine_ratings %>% 
-  mutate(country = fct_lump(country, 7) %>% 
-           fct_relevel("US") %>% 
-           fct_reorder(points)
-         ) %>% 
+wine_rating_words %>% 
+  count(word, sort = T)
+```
+
+
+```{r, include =F, eval=F}
+wine_ratings %>%
+  mutate(country = fct_lump(country, 7),
+         country = fct_relevel(country, "US"),
+         country = fct_reorder(country,points)
+         ) %>%
   ggplot(aes(country, points))+
   geom_boxplot()+
   coord_flip()
