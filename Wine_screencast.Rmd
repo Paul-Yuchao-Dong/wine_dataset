@@ -109,6 +109,10 @@ anova(model) %>%
   tidy() %>% 
   mutate(portion = sumsq / sum(sumsq))
 ```
+### Lasso regression on words in description
+```{r}
+library(tidytext)
+```
 
 
 ```{r}
