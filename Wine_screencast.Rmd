@@ -188,14 +188,17 @@ wine_word_matrix %>% mean
 wine_ids <- wine_word_matrix %>% rownames() %>% as.integer()
 scores <- wine_ratings$points[wine_ids]
 
+```
+
+### what is glmnet?
+```{r}
 library(glmnet)
 
 glmnet_model <- glmnet(wine_word_matrix, scores)
-```
 
-```{r}
+
 glmnet_model %>% 
-  tidy %>% 
+  tidy() %>% 
   filter(term %in% c("rich", "black", "simple", "complex", "vineyard", "concentrated")) %>% 
   ggplot(aes(lambda, estimate, color = term))+
   geom_line()+
@@ -209,21 +212,86 @@ glmnet_model %>%
   geom_line()+
   scale_x_log10()
 ```
+
 ```{r}
 library(doMC)
 registerDoMC(cores = 4)
 ```
 
 ```{r}
-cv_glmnet_model <- cv.glmnet(wine_word_matrix, scores, parallel = T)
-
-cv_glmnet_model %>% plot()
+wine_word_matrix_extra <- cbind(wine_word_matrix, log_price = log2(wine_ratings$price))
 ```
 
-
+```{r}
+cv_glmnet_model_extra <- cv.glmnet(wine_word_matrix_extra, scores, parallel = T)
+cv_glmnet_model_extra %>% plot()
+```
 
 ```{r}
-wine_word_matrix_extra <- cbind(wine_word_matrix, log_price = log2(wine_ratings$price))
+cv_glmnet_model_extra$glmnet.fit %>% 
+  tidy() %>% 
+  filter(term %in% c("rich", "black", "simple", "complex", "vineyard", "concentrated")) %>% 
+  ggplot(aes(lambda, estimate, color = term))+
+  geom_line()+
+  scale_x_log10()+
+  geom_hline(lty =2, yintercept = 0)
+
+cv_glmnet_model_extra$glmnet.fit %>% 
+  tidy() %>% 
+  count(lambda) %>% 
+  ggplot(aes(lambda, n))+
+  geom_line()+
+  scale_x_log10()
+
+```
+
+```{r}
+lexicon <- 
+cv_glmnet_model_extra$glmnet.fit %>% 
+ tidy() %>% 
+ filter(lambda == cv_glmnet_model_extra$lambda.1se,
+         term != "(Intercept)",
+        term!="log_price"
+        ) 
+
+
+lexicon %>% 
+  group_by(direction = ifelse(estimate<0, "Negative", "Positive")) %>% 
+  top_n(16, abs(estimate)) %>% 
+  ungroup() %>% 
+  mutate(term = fct_reorder(term, estimate)) %>% 
+  ggplot(aes(term, estimate, fill = direction))+
+  geom_col()+
+  coord_flip()+
+  labs(
+    title = "What words are predictive of a wine's score",
+    y = "Estimated effect of word on thw wine points",
+    x = "")
+
+```
+```{r}
+lexicon2 <- lexicon %>% 
+  select(word = term, coefficient = estimate)
+```
+
+```{r}
+wine_ratings %>% 
+  mutate(wine_id = row_number()) %>% 
+  arrange(points) %>% 
+  head(1) %>% 
+  select(wine_id, description, points)%>% 
+  pull(description)
+
+wine_rating_words %>% 
+  filter(wine_id %in% sample(unique(wine_id), 4)) %>%
+  distinct(word, title, points) %>% 
+  mutate(wine = paste0(title %>% str_trunc(20), "(", points, ")")) %>% 
+  inner_join(lexicon2, by = "word") %>% 
+  mutate(word = fct_reorder(word, coefficient)) %>% 
+  ggplot(aes(word, coefficient, fill = coefficient>0))+
+  geom_col()+
+  coord_flip()+
+  facet_wrap(~wine, scales = "free_y")
 ```
 
 
